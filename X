@@ -1,0 +1,156 @@
+
+MinimizeBtn.MouseButton1Click:Connect(minimizeMenu)
+LogoButton.MouseButton1Click:Connect(restoreMenu)
+
+--=====================================================
+-- BUTTON EVENTS
+--=====================================================
+SystemBtn.MouseButton1Click:Connect(function()
+	State.SystemEnabled = not State.SystemEnabled
+	if not State.SystemEnabled then
+		State.AutoShoot = false
+		stopAutoLoop()
+	end
+	refreshUI()
+
+	if State.SystemEnabled and State.AutoShoot then
+		startAutoLoop()
+	end
+end)
+
+ManualBtn.MouseButton1Click:Connect(function()
+	State.ManualMode = not State.ManualMode
+	refreshUI()
+end)
+
+AutoBtn.MouseButton1Click:Connect(function()
+	State.AutoShoot = not State.AutoShoot
+	refreshUI()
+
+	if State.SystemEnabled and State.AutoShoot then
+		startAutoLoop()
+	else
+		stopAutoLoop()
+	end
+end)
+
+FireBtn.MouseButton1Click:Connect(function()
+	State.FireMode = not State.FireMode
+	if State.FireMode then
+		State.IceMode = false
+	end
+	refreshUI()
+	if State.SystemEnabled and State.AutoShoot then
+		startAutoLoop()
+	end
+end)
+
+IceBtn.MouseButton1Click:Connect(function()
+	State.IceMode = not State.IceMode
+	if State.IceMode then
+		State.FireMode = false
+	end
+	refreshUI()
+	if State.SystemEnabled and State.AutoShoot then
+		startAutoLoop()
+	end
+end)
+
+AutoKillBtn.MouseButton1Click:Connect(function()
+	State.AutoKill = not State.AutoKill
+	refreshUI()
+end)
+
+DamageBox.FocusLost:Connect(function()
+	State.Damage = clampNumber(DamageBox.Text, 1, 1000, State.Damage)
+	DamageBox.Text = tostring(State.Damage)
+end)
+
+PowerBox.FocusLost:Connect(function()
+	State.Power = clampNumber(PowerBox.Text, 1, 100, State.Power)
+	PowerBox.Text = tostring(State.Power)
+end)
+
+ActionButton.MouseButton1Click:Connect(function()
+	if State.SystemEnabled and State.ManualMode then
+		fireOnce()
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if State.SystemEnabled and not State.ManualMode then
+			fireOnce()
+		end
+	end
+end)
+
+--=====================================================
+-- AUTO-KILL SUPPORT
+--=====================================================
+local function freezeDeadCharacter(deadCharacter)
+	if not deadCharacter or not deadCharacter.Parent then
+		return
+	end
+
+	local deadHum = deadCharacter:FindFirstChildOfClass("Humanoid")
+	local root = deadCharacter:FindFirstChild("HumanoidRootPart")
+
+	if deadHum then
+		deadHum.WalkSpeed = 0
+		deadHum.JumpPower = 0
+		deadHum.AutoRotate = false
+		deadHum.PlatformStand = true
+		pcall(function()
+			deadHum:ChangeState(Enum.HumanoidStateType.Physics)
+		end)
+	end
+
+	if root and root:IsA("BasePart") then
+		root.Anchored = true
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+	end
+end
+
+local function bindAutoKillToHumanoid(targetHumanoid)
+	if not targetHumanoid then
+		return
+	end
+
+	targetHumanoid.Died:Connect(function()
+		if State.AutoKill then
+			task.defer(function()
+				local model = targetHumanoid.Parent
+				freezeDeadCharacter(model)
+			end)
+		end
+	end)
+end
+
+-- Hook current and future humanoids found in the character
+task.spawn(function()
+	while true do
+		task.wait(1.5)
+		if character and character.Parent then
+			local hum = character:FindFirstChildOfClass("Humanoid")
+			if hum and hum ~= humanoid then
+				humanoid = hum
+				bindAutoKillToHumanoid(humanoid)
+			end
+		end
+	end
+end)
+
+--=====================================================
+-- INITIAL STATE
+--=====================================================
+refreshUI()
+refreshCharacter()
+if humanoid then
+	bindAutoKillToHumanoid(humanoid)
+end
